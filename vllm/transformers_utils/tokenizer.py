@@ -109,8 +109,7 @@ def get_tokenizer(
 
     if tokenizer_mode == "slow":
         if kwargs.get("use_fast", False):
-            raise ValueError(
-                "Cannot use the fast tokenizer in slow tokenizer mode.")
+            raise ValueError("Cannot use the fast tokenizer in slow tokenizer mode.")
         kwargs["use_fast"] = False
 
     if "truncation_side" not in kwargs:

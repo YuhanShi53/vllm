@@ -137,13 +137,19 @@ def get_config(
     config_format: ConfigFormat = ConfigFormat.AUTO,
     **kwargs,
 ) -> PretrainedConfig:
-    # Separate model folder from file path for GGUF models
-
+    
+    # comment(syh)
+    # 如果模型是 gguf 模型，则 model 指向模型所在的目录
     is_gguf = check_gguf_file(model)
     if is_gguf:
         kwargs["gguf_file"] = Path(model).name
         model = Path(model).parent
 
+    # comment(syh)
+    # 当 ConfigFormat 为 AUTO 时，根据模型目录下，是否存在 HF 或 MISTRAL 所需的 config 文件，根据 config 文件的类型，
+    # 为 config_format 赋值。
+    # - HF: config_format = ConfigFormat.HF
+    # - MISTRAL: config_format = ConfigFormat.MISTRAL
     if config_format == ConfigFormat.AUTO:
         if is_gguf or file_or_path_exists(model,
                                           HF_CONFIG_NAME,
@@ -171,7 +177,9 @@ def get_config(
         config_dict, _ = PretrainedConfig.get_config_dict(
             model, revision=revision, code_revision=code_revision, **kwargs)
 
-        # Use custom model class if it's in our registry
+        # comment(syh)
+        # vLLM 定义了一些开源模型的新的实现，如果用户使用的是 HF 模型，并且 model_type 在 _CONFIG_REGISTRY 中，
+        # 使用 vLLM 实现的 config。
         model_type = config_dict.get("model_type")
         if model_type in _CONFIG_REGISTRY:
             config_class = _CONFIG_REGISTRY[model_type]

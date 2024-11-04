@@ -936,6 +936,18 @@ class EngineArgs:
             ray_workers_use_nsight=self.ray_workers_use_nsight,
             distributed_executor_backend=self.distributed_executor_backend)
 
+        # comment(syh)
+        # 根据 max_model_len 判断是否为长文模型。
+        # 如果：
+        #   - 未显式设置 enable_chunked_prefill
+        #   - 模型为长上下文输入
+        #   - 非多模态模型
+        #   - 使用 GPU
+        #   - 且没有启用滑动窗口
+        #   - 没有启用 speculative decoding，
+        #   - 没有启用 LoRA
+        #   - 没有启用 Prompt Adapter，
+        # 则将 enable_chunked_prefill 设置为 True。
         max_model_len = model_config.max_model_len
         use_long_context = max_model_len > 32768
         if self.enable_chunked_prefill is None:
@@ -963,6 +975,8 @@ class EngineArgs:
             if self.enable_chunked_prefill is None:
                 self.enable_chunked_prefill = False
 
+        # comment(syh)
+        # 如果用户设置长上下文输入，但未启用 chunked prefill，vLLM 可能会在 prefilling 阶段 OOM，或者速度很慢。
         if not self.enable_chunked_prefill and use_long_context:
             logger.warning(
                 "The model has a long context length (%s). This may cause OOM "
@@ -997,8 +1011,10 @@ class EngineArgs:
             disable_logprobs=self.disable_logprobs_during_spec_decoding,
         )
 
-        # Reminder: Please update docs/source/serving/compatibility_matrix.rst
-        # If the feature combo become valid
+        # comment(syh)
+        # 进行多步推理时，不支持以下特性：
+        #     - 投机推理
+        #     - 开启 enable_chunked_prefill 且 pipeline_parallel_size > 1
         if self.num_scheduler_steps > 1:
             if speculative_config is not None:
                 raise ValueError("Speculative decoding is not supported with "
@@ -1041,6 +1057,7 @@ class EngineArgs:
                              and parallel_config.use_ray),
             policy=self.scheduling_policy,
         )
+
         lora_config = LoRAConfig(
             max_lora_rank=self.max_lora_rank,
             max_loras=self.max_loras,

@@ -163,8 +163,7 @@ class ModelConfig:
                                     code_revision, rope_scaling, rope_theta,
                                     config_format)
         self.hf_text_config = get_hf_text_config(self.hf_config)
-        self.hf_image_processor_config = get_hf_image_processor_config(
-            self.model, revision)
+        self.hf_image_processor_config = get_hf_image_processor_config(self.model, revision)
         self.dtype = _get_and_verify_dtype(self.hf_text_config, dtype)
         self.use_async_output_proc = use_async_output_proc
         self.mm_processor_kwargs = mm_processor_kwargs
@@ -195,10 +194,8 @@ class ModelConfig:
             disable_sliding_window=self.disable_sliding_window,
             sliding_window_len=self.get_hf_config_sliding_window(),
             spec_target_max_model_len=spec_target_max_model_len)
-        self.served_model_name = get_served_model_name(model,
-                                                       served_model_name)
-        self.multimodal_config = self._init_multimodal_config(
-            limit_mm_per_prompt)
+        self.served_model_name = get_served_model_name(model, served_model_name)
+        self.multimodal_config = self._init_multimodal_config(limit_mm_per_prompt)
         if not self.skip_tokenizer_init:
             self._verify_tokenizer_mode()
 
