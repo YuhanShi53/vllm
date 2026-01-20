@@ -1,0 +1,144 @@
+# 调度器
+
+graph LR
+    subgraph "请求队列管理"
+        Waiting[Waiting Queue<br/>优先级队列]
+        Running[Running Queue<br/>执行中请求]
+    end
+    
+    subgraph "调度决策"
+        Schedule[schedule()<br/>主调度函数]
+        Policy[SchedulingPolicy<br/>FCFS/LPM/PRIORITY]
+    end
+    
+    subgraph "资源管理"
+        KVMgr[KVCacheManager<br/>块分配器]
+        EncoderMgr[EncoderCacheManager<br/>编码器缓存]
+        Budget[Token Budget<br/>max_num_batched_tokens]
+    end
+    
+    Waiting --> Schedule
+    Running --> Schedule
+    Schedule --> Policy
+    Schedule --> KVMgr
+    Schedule --> EncoderMgr
+    Schedule --> Budget
+    
+    style Schedule fill:#ff9,stroke:#333,stroke-width:3px
+
+# Chunked Prefill 和 Continuous Batching
+
+graph TB
+    subgraph "请求状态"
+        R1[Request 1<br/>Prompt: 1000 tokens<br/>Status: RUNNING]
+        R2[Request 2<br/>Prompt: 100 tokens<br/>Status: RUNNING]
+        R3[Request 3<br/>Prompt: 5000 tokens<br/>Status: WAITING]
+    end
+    
+    subgraph "Token 预算: max_num_batched_tokens=2048"
+        Budget[Token Budget]
+    end
+    
+    subgraph "调度策略"
+        Step1[Step 1:<br/>R1: 512 tokens (chunked)<br/>R2: 100 tokens<br/>Total: 612/2048]
+        Step2[Step 2:<br/>R1: 488 tokens (complete)<br/>R3: 1000 tokens (chunked)<br/>Total: 1488/2048]
+        Step3[Step 3:<br/>R1: 1 token (decode)<br/>R2: 1 token (decode)<br/>R3: 1000 tokens (chunked)<br/>Total: 1002/2048]
+    end
+    
+    R1 --> Step1
+    R2 --> Step1
+    R3 -.->|pending| Step1
+    
+    Step1 --> Step2
+    Step2 --> Step3
+
+# Prefix cache机制
+
+graph TB
+    subgraph "请求 1"
+        Prompt1["You are a helpful assistant.<br>Please explain quantum computing<br>in simple terms."]
+    end
+    
+    subgraph "请求 2"
+        Prompt2["You are a helpful assistant.<br>Explain machine learning<br>basics to a beginner."]
+    end
+    
+    subgraph "KV Cache"
+        Block1[Block 0: "You are a helpful"<br/>Hash: ABC123<br/>Cached: YES]
+        Block2[Block 1: " assistant. Please"<br/>Hash: DEF456<br/>Cached: YES]
+        Block3[Block 2: Unique prefix<br/>Hash: GHI789<br/>Cached: YES]
+        Block4[Block 3+: Unique tokens<br/>Hash: NEW<br/>Cached: NO]
+    end
+    
+    Prompt1 --> Block1
+    Prompt1 --> Block2
+    Prompt1 --> Block3
+    Prompt1 --> Block4
+    
+    Prompt2 --> Block1
+    Prompt2 --> Block2
+    Prompt2 --> Block5[Block 2: "Explain machine"<br/>Hash: JKL012<br/>Cached: NO]
+    Prompt2 --> Block6[Block 3+: Unique tokens<br/>Cached: NO]
+    
+    style Block1 fill:#9f9,stroke:#333
+    style Block2 fill:#9f9,stroke:#333
+    style Block3 fill:#9f9,stroke:#333
+
+# 抢占机制
+
+graph TB
+    subgraph "调度前"
+        Running1[R1: RUNNING<br/>Priority: 0]
+        Running2[R2: RUNNING<br/>Priority: 1]
+        Running3[R3: RUNNING<br/>Priority: 2]
+        NewReq[R4: WAITING<br/>Priority: 10<br/>Long Prompt]
+    end
+    
+    subgraph "内存不足"
+        NoMem[KV Cache Full<br/>Need 4 blocks<br/>Available: 2 blocks]
+    end
+    
+    subgraph "抢占策略"
+        Preempt[Preempt Lowest Priority]
+        Free[Free R3's blocks]
+        Schedule[Schedule R4]
+    end
+    
+    subgraph "调度后"
+        Running1[R1: RUNNING<br/>Priority: 0]
+        Running2[R2: RUNNING<br/>Priority: 1]
+        Running4[R4: RUNNING<br/>Priority: 10]
+        Waiting3[R3: PREEMPTED<br/>Priority: 2<br/>Back to WAITING]
+    end
+    
+    NewReq --> NoMem
+    NoMem --> Preempt
+    Preempt --> Free
+    Free --> Schedule
+    Schedule --> Running4
+    Running3 --> Waiting3
+
+
+# 多层资源管理
+
+graph TB
+    subgraph "资源约束"
+        C1[max_num_seqs<br/>最大并发请求数]
+        C2[max_num_batched_tokens<br/>每步最大 token 数]
+        C3[GPU Memory<br/>KV Cache 限制]
+        C4[Encoder Budget<br/>编码器计算预算]
+    end
+    
+    subgraph "分配顺序"
+        S1[1. 检查 running 请求]
+        S2[2. 检查 waiting 请求]
+        S3[3. 分配 KV blocks]
+        S4[4. 分配 encoder cache]
+        S5[5. 处理抢占]
+    end
+    
+    C1 --> S1
+    C2 --> S1
+    C3 --> S3
+    C4 --> S4
+    S3 --> S5

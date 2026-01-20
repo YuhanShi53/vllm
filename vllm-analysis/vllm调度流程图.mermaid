@@ -1,0 +1,58 @@
+sequenceDiagram
+    participant C as Client
+    participant API as FastAPI Server
+    participant LLMAPI as AsyncLLM
+    participant IP as InputProcessor
+    participant OP as OutputProcessor
+    participant EC as EngineCoreClient
+    participant S as Scheduler
+    participant KV as KVCacheManager
+    participant E as Executor
+    participant M as ModelRunner
+    
+    C->>API: POST /v1/chat/completions
+    API->>LLMAPI: generate(prompt, params)
+    LLMAPI->>IP: process_inputs()
+    IP->>IP: Tokenization
+    IP->>IP: Multimodal Feature Extraction
+    IP-->>LLMAPI: EngineCoreRequest
+    
+    LLMAPI->>EC: add_request_async(request)
+    EC->>S: add_request()
+    S->>S: waiting_queue.add(request)
+    
+    Note over S: 调度循环开始
+    loop Every Iteration
+        S->>KV: allocate_slots()
+        KV->>KV: Check Prefix Cache
+        KV->>KV: Allocate Blocks
+        KV-->>S: new_blocks or None
+        
+        alt No Memory Available
+            S->>S: preempt_request()
+            S->>KV: free(preempted_req)
+        end
+        
+        S->>E: execute(scheduler_output)
+        E->>M: model_forward()
+        M->>M: Attention + FFN
+        M-->>E: sampled_tokens
+        
+        E->>KV: update_cache()
+        E-->>S: ModelRunnerOutput
+        
+        S->>S: update_from_output()
+        S->>S: check_stop_conditions()
+        
+        alt Request Finished
+            S->>KV: free(request)
+            S-->>EC: EngineCoreOutput
+        end
+    end
+    
+    EC-->>OP: get_output_async()
+    OP->>OP: process_outputs()
+    OP->>OP: Detokenization
+    OP-->>LLMAPI: RequestOutput
+    LLMAPI-->>API: yield RequestOutput
+    API-->>C: Streaming Response

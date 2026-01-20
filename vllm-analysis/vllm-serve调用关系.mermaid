@@ -1,0 +1,62 @@
+graph TB
+    subgraph "客户端层"
+        Client[HTTP Client]
+    end
+
+    subgraph "API Server 层"
+        FastAPI[FastAPI Server]
+        AuthMiddleware[Authentication Middleware]
+        ChatHandler[OpenAIServingChat]
+        CompletionHandler[OpenAIServingCompletion]
+        EmbeddingHandler[OpenAIServingEmbedding]
+    end
+
+    subgraph "引擎客户端层"
+        AsyncLLM[AsyncLLM]
+        InputProcessor[InputProcessor]
+        OutputProcessor[OutputProcessor]
+        EngineCoreClient[EngineCoreClient<br/>ZeroMQ IPC]
+    end
+
+    subgraph "引擎核心层 EngineCore Process"
+        Scheduler[Scheduler]
+        KVCacheManager[KVCacheManager<br/>Prefix Caching]
+        EncoderCache[EncoderCacheManager<br/>Multimodal Cache]
+        KVConnector[KVConnector<br/>Remote KV Transfer]
+        StructuredOutput[StructuredOutputManager]
+    end
+
+    subgraph "执行层 Worker Processes"
+        Executor[Executor<br/>Multiproc/Ray/UniProc]
+        ModelRunner[ModelRunner]
+        CacheEngine[CacheEngine<br/>GPU KV Cache]
+        Worker[Worker Processes]
+    end
+
+    Client --> FastAPI
+    FastAPI --> AuthMiddleware
+    AuthMiddleware --> ChatHandler
+    AuthMiddleware --> CompletionHandler
+    AuthMiddleware --> EmbeddingHandler
+    
+    ChatHandler --> AsyncLLM
+    CompletionHandler --> AsyncLLM
+    EmbeddingHandler --> AsyncLLM
+    
+    AsyncLLM --> InputProcessor
+    InputProcessor --> EngineCoreClient
+    EngineCoreClient --> Scheduler
+    
+    Scheduler --> KVCacheManager
+    Scheduler --> EncoderCache
+    Scheduler --> KVConnector
+    Scheduler --> StructuredOutput
+    
+    Scheduler --> Executor
+    Executor --> ModelRunner
+    ModelRunner --> CacheEngine
+    Executor --> Worker
+    
+    style Scheduler fill:#f9f,stroke:#333,stroke-width:4px
+    style KVCacheManager fill:#bbf,stroke:#333,stroke-width:2px
+    style AsyncLLM fill:#bfb,stroke:#333,stroke-width:2px
