@@ -424,6 +424,11 @@ class InputProcessor:
         # reused across requests, therefore identifying multimodal data items
         # by their content is no longer necessary, and we create uuids with
         # request id-modality-index as multimodal hash overrides.
+        #
+        # 当用户开启多模态功能且没有开启前缀缓存时，不再需要通过内容来标识多模态数据项，
+        # 因此使用 RequestID-Modality-Index 作为多模态哈希值。
+        #
+        # 其中，Index 是当前数据项在当前模态的索引。
         if (
             self.model_config.multimodal_config
             and self.model_config.multimodal_config.mm_processor_cache_gb == 0
