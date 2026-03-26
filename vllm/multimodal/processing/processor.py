@@ -1110,7 +1110,9 @@ class BaseMultiModalProcessor(ABC, Generic[_I]):
         self,
         mm_items: MultiModalDataItems,
     ) -> tuple[Mapping[str, object], Mapping[str, object]]:
-        """Extract processor and passthrough data from multi-modal items."""
+        """
+        从 MultiModalDataItems 中提取 Processor 待处理的数据，包含多模态数据和直通数据。
+        """
         processor_data = dict[str, object]()
         passthrough_data = dict[str, object]()
 
@@ -1167,13 +1169,14 @@ class BaseMultiModalProcessor(ABC, Generic[_I]):
         tokenization_kwargs: Mapping[str, object],
     ) -> tuple[list[int], BatchFeature, bool]:
         """
-        Apply the HF processor on the prompt text and multi-modal data
-        together.
-
-        In addition, return whether prompt updates have been applied.
+        提取文本和多模态数据，调用 processor 进行对文本、多模态数据进行处理，并返回：
+        # - prompt token ids
+        # - processor 输出的数据
+        # - 是否进行了 prompt 更新。
         """
         processor_data, passthrough_data = self._get_hf_mm_data(mm_items)
 
+        # 调用 HF processor 进行处理
         processed_data = self._call_hf_processor(
             prompt=prompt_text,
             mm_data=processor_data,
@@ -1184,6 +1187,9 @@ class BaseMultiModalProcessor(ABC, Generic[_I]):
 
         (prompt_ids,) = processed_data.pop("input_ids").tolist()
 
+        # 通过判断多模态数据是否是 embedding 来判断是否更新了 prompt：is_update_applied
+        # 后续根据 is_update_applied 来决定插入多模态数据 placeholder 的方式。具体详见：
+        # vllm/multimodal/processing/processor.py#_maybe_apply_prompt_updates()
         is_update_applied = self._hf_processor_applies_updates(
             prompt_text=prompt_text,
             mm_items=mm_items,
@@ -1471,6 +1477,9 @@ class BaseMultiModalProcessor(ABC, Generic[_I]):
         *,
         mm_uuids: MultiModalUUIDDict | None = None,
     ) -> tuple[list[int], MultiModalProcessingInfo, bool]:
+        """
+        没有多模态数据缓存的情况下，执行 processor 处理并进行结果缓存。
+        """
         (
             prompt_ids,
             mm_processed_data,
@@ -1769,6 +1778,8 @@ class BaseMultiModalProcessor(ABC, Generic[_I]):
         3. Extract information about the placeholder tokens from the
            processed token IDs.
         """
+        # TODO(YuhanShi)
+        # 如何避免不同请求之间的 request_id 串行？
         request_id = get_current_request_id()
         if request_id is not None:
             self.info.ctx.create_timing_stats(request_id)
@@ -1776,6 +1787,8 @@ class BaseMultiModalProcessor(ABC, Generic[_I]):
         if tokenization_kwargs is None:
             tokenization_kwargs = {}
 
+        # 创建 Processor，如果之前创建过则直接从缓存中取出 processor。
+        # 调用 processor 对 text 和多模态数据进行处理。
         (
             prompt_ids,
             mm_info,

@@ -248,12 +248,15 @@ class InputProcessor:
         request_id: str,
         prompt: PromptType | DictPrompt | TokPrompt,
     ) -> MultiModalUUIDDict | None:
-        """Build per-item multimodal hash overrides when enabled. In this case,
-        multimodal data items are identified by their request id, modality and
-        index rather than their content.
+        """
+        当 prefix cache 被禁用，且 mm_processor_cache_gb==0 时，为多模态输入生成UUID，返回格式如下：
+        {
+            "image": ["{request_id}-image-0", "{request_id}-image-1", ...],
+            "audio": ["{request_id}-audio-0", "{request_id}-audio-1", ...],
+        }
 
-        Returns a dictionary of modality -> list[str] of overrides, or None if
-        disabled or no multimodal data is present.
+        由于此时禁用了 prefix cache，且多模态数据不参与前缀缓存，因此每个多模态数据项都不需要被哈希为内容相关的 UUID 来实现跨请求缓存命中，
+        而是可以直接使用基于"请求 ID + 模态名 + 序号"的 UUID 来唯一标识每个多模态数据项，从而避免了哈希计算的开销。
         """
         mm_data = self._extract_mm_data(prompt)
         if not mm_data:
@@ -339,11 +342,8 @@ class InputProcessor:
         # Optionally generate multimodal hash overrides to avoid hashing
         # multimodal data items by their content as their identifiers.
 
-        # NOTE: when users explicitly turn off BOTH prefix caching and input
-        # processing caching, no multimodal features or embeddings will be
-        # reused across requests, therefore identifying multimodal data items
-        # by their content is no longer necessary, and we create uuids with
-        # request id-modality-index as multimodal hash overrides.
+        # 当 prefix cache 被禁用，且 mm_processor_cache_gb==0 时，主动为多模态输入生成UUID
+        # 以避免在后续处理过程中对多模态数据进行哈希计算，从而减少处理开销并提高性能。
         if (
             self.model_config.multimodal_config
             and self.model_config.multimodal_config.mm_processor_cache_gb == 0

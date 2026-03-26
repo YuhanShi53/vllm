@@ -124,8 +124,11 @@ class InputPreprocessor:
         Apply the model's tokenizer to a text prompt, returning the
         corresponding token IDs.
         """
+
+        # self.renderer 封装了 Tokenizer 和 MultiModalProcessor
         renderer = self.renderer
 
+        # 使用传入值覆盖框架默认值
         tok_params = renderer.default_cmpl_tok_params.with_kwargs(
             **(tokenization_kwargs or {})
         )
@@ -250,6 +253,10 @@ class InputPreprocessor:
 
         inputs: TokenInputs | MultiModalInputs
         if multi_modal_data := parsed_content.get("multi_modal_data"):
+
+            # 如果是多模态输入，调用 processor 对 text 和多模态数据进行处理，
+            # 得到 prompt token ids 和多模态数据处理后的信息。
+            # TODO(YuhanShi)：计算了 cache 和 mm_uuid?
             inputs = self._process_multimodal(
                 prompt_text,
                 multi_modal_data,
